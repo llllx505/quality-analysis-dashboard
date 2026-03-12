@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>质检结果统计分析</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div style="width: 80%; margin: auto;">
+        <canvas id="scoreChart"></canvas>
+    </div>
+
+    <script>
+        const rawData = {
+            "images_data/1.jpg": {"result_v1": {"score": 1, "acc": 0.3}, "result_v2": {"score": 2, "acc": 0.3}},
+            "images_data/2.jpg": {"result_v1": {"score": 1, "acc": 0.3}, "result_v2": {"score": 2, "acc": 0.3}},
+            "images_data/3.jpg": {"result_v1": {"score": 1, "acc": 0.3}, "result_v2": {"score": 2, "acc": 0.3}}
+        };
+
+        const labels = Object.keys(rawData);
+        const scoresV1 = labels.map(key => rawData[key].result_v1.score);
+        const scoresV2 = labels.map(key => rawData[key].result_v2.score);
+
+        const ctx = document.getElementById("scoreChart").getContext("2d");
+        new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: "Result V1 Score",
+                    data: scoresV1,
+                    backgroundColor: "rgba(54, 162, 235, 0.2)"
+                }, {
+                    label: "Result V2 Score",
+                    data: scoresV2,
+                    backgroundColor: "rgba(255, 99, 132, 0.2)"
+                }]
+            },
+            options: { scales: { y: { beginAtZero: true } } }
+        });
+    </script>
+</body>
+</html>
