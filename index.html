@@ -14,7 +14,7 @@
         </header>
 
         <div class="bg-white p-6 rounded-xl shadow-sm mb-8 border border-gray-200">
-            <input type="file" id="fileInput" accept=".json" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+            <input type="file" id="fileInput" accept=".json" class="block w-full text-sm text-gray-500">
             <button onclick="processFile()" class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">加载并深度分析</button>
         </div>
 
@@ -41,9 +41,21 @@
 
     <script>
         function processFile() {
-            const file = document.getElementById('fileInput').files[0];
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files.length) {
+                alert("请先选择 JSON 文件！");
+                return;
+            }
+            const file = fileInput.files[0];
             const reader = new FileReader();
-            reader.onload = e => render(JSON.parse(e.target.result));
+            reader.onload = e => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    render(data);
+                } catch (err) {
+                    alert("JSON 解析失败，请检查文件格式：" + err.message);
+                }
+            };
             reader.readAsText(file);
         }
 
@@ -52,32 +64,34 @@
             document.getElementById("tableContainer").classList.remove("hidden");
             
             const keys = Object.keys(data);
-            const scores1 = keys.map(k => data[k].result_v1.score);
-            const scores2 = keys.map(k => data[k].result_v2.score);
+            const scores1 = keys.map(k => data[k].result_v1 ? data[k].result_v1.score : 0);
+            const scores2 = keys.map(k => data[k].result_v2 ? data[k].result_v2.score : 0);
             
             // Stats logic
             const regressions = keys.filter((k, i) => scores2[i] < scores1[i]);
             document.getElementById("statsSummary").innerHTML = \`
-                <div class="p-4 bg-blue-50 rounded">V1 Avg: ${(scores1.reduce((a,b)=>a+b)/scores1.length).toFixed(2)}</div>
-                <div class="p-4 bg-green-50 rounded">V2 Avg: ${(scores2.reduce((a,b)=>a+b)/scores2.length).toFixed(2)}</div>
+                <div class="p-4 bg-blue-50 rounded">V1 平均分: ${(scores1.reduce((a,b)=>a+b, 0)/scores1.length).toFixed(2)}</div>
+                <div class="p-4 bg-green-50 rounded">V2 平均分: ${(scores2.reduce((a,b)=>a+b, 0)/scores2.length).toFixed(2)}</div>
                 <div class="p-4 \${regressions.length > 0 ? 'bg-red-50' : 'bg-green-50'} rounded">退步项数量: \${regressions.length}</div>
             \`;
 
             // Table rendering
             const tbody = document.getElementById("dataTable");
             tbody.innerHTML = keys.map(k => {
-                const s1 = data[k].result_v1.score;
-                const s2 = data[k].result_v2.score;
+                const s1 = data[k].result_v1 ? data[k].result_v1.score : 0;
+                const s2 = data[k].result_v2 ? data[k].result_v2.score : 0;
                 const status = s2 >= s1 ? '<span class="text-green-600 font-bold">优化</span>' : '<span class="text-red-600 font-bold">退步 ⚠️</span>';
                 return \`<tr class="border-b hover:bg-gray-50"><td class="p-4">\${k}</td><td class="p-4">\${s1}</td><td class="p-4">\${s2}</td><td class="p-4">\${status}</td></tr>\`;
             }).join('');
 
             // Chart
-            new Chart(document.getElementById("mainChart"), {
+            const ctx = document.getElementById("mainChart").getContext("2d");
+            if (window.myChart instanceof Chart) window.myChart.destroy();
+            window.myChart = new Chart(ctx, {
                 type: "line",
                 data: {
                     labels: keys,
-                    datasets: [{label: "V1", data: scores1, borderColor: "#2563eb"}, {label: "V2", data: scores2, borderColor: "#d97706"}]
+                    datasets: [{label: "V1 Score", data: scores1, borderColor: "#2563eb"}, {label: "V2 Score", data: scores2, borderColor: "#d97706"}]
                 }
             });
         }
