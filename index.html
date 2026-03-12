@@ -2,58 +2,82 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <title>质检可视化分析平台</title>
+    <title>质检性能对比分析仪</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
-        .controls { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-        .card { background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; }
-        button { padding: 10px 15px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-    </style>
 </head>
-<body>
-    <h1>质检数据可视化</h1>
-    <div class="controls">
-        <label>选择 JSON 数据文件：</label>
-        <input type="file" id="fileInput" accept=".json">
-        <button onclick="processFile()">分析数据</button>
+<body class="bg-gray-50 min-h-screen p-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">质检模型性能对比分析</h1>
+            <p class="text-gray-600">可视化展示 v1 与 v2 的差异，快速锁定退步项</p>
+        </header>
+
+        <div class="bg-white p-6 rounded-xl shadow-sm mb-8 border border-gray-200">
+            <input type="file" id="fileInput" accept=".json" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+            <button onclick="processFile()" class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">加载并深度分析</button>
+        </div>
+
+        <div id="dashboard" class="hidden grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 class="font-semibold mb-4">评分趋势对比</h3>
+                <canvas id="mainChart"></canvas>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 class="font-semibold mb-4">关键性能指标</h3>
+                <div id="statsSummary" class="space-y-4"></div>
+            </div>
+        </div>
+
+        <div id="tableContainer" class="mt-8 hidden bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <table class="w-full text-left">
+                <thead class="bg-gray-100 border-b">
+                    <tr><th class="p-4">文件 ID</th><th class="p-4">V1 Score</th><th class="p-4">V2 Score</th><th class="p-4">状态</th></tr>
+                </thead>
+                <tbody id="dataTable"></tbody>
+            </table>
+        </div>
     </div>
-    <div id="stats" style="display:none; background:white; padding:20px; border-radius:8px; margin-bottom:20px;">
-        <canvas id="mainChart"></canvas>
-    </div>
-    <div class="grid" id="data-grid"></div>
 
     <script>
         function processFile() {
             const file = document.getElementById('fileInput').files[0];
-            if (!file) return alert("请先选择文件！");
             const reader = new FileReader();
             reader.onload = e => render(JSON.parse(e.target.result));
             reader.readAsText(file);
         }
 
         function render(data) {
-            const grid = document.getElementById("data-grid");
-            const stats = document.getElementById("stats");
-            grid.innerHTML = "";
-            stats.style.display = "block";
-
+            document.getElementById("dashboard").classList.remove("hidden");
+            document.getElementById("tableContainer").classList.remove("hidden");
+            
             const keys = Object.keys(data);
-            keys.forEach(k => {
-                grid.innerHTML += `<div class="card">
-                    <h4>${k}</h4>
-                    <p>V1: ${data[k].caption_v1} (Score: ${data[k].result_v1.score})</p>
-                    <p>V2: ${data[k].caption_v2} (Score: ${data[k].result_v2.score})</p>
-                </div>`;
-            });
+            const scores1 = keys.map(k => data[k].result_v1.score);
+            const scores2 = keys.map(k => data[k].result_v2.score);
+            
+            // Stats logic
+            const regressions = keys.filter((k, i) => scores2[i] < scores1[i]);
+            document.getElementById("statsSummary").innerHTML = \`
+                <div class="p-4 bg-blue-50 rounded">V1 Avg: ${(scores1.reduce((a,b)=>a+b)/scores1.length).toFixed(2)}</div>
+                <div class="p-4 bg-green-50 rounded">V2 Avg: ${(scores2.reduce((a,b)=>a+b)/scores2.length).toFixed(2)}</div>
+                <div class="p-4 \${regressions.length > 0 ? 'bg-red-50' : 'bg-green-50'} rounded">退步项数量: \${regressions.length}</div>
+            \`;
 
+            // Table rendering
+            const tbody = document.getElementById("dataTable");
+            tbody.innerHTML = keys.map(k => {
+                const s1 = data[k].result_v1.score;
+                const s2 = data[k].result_v2.score;
+                const status = s2 >= s1 ? '<span class="text-green-600 font-bold">优化</span>' : '<span class="text-red-600 font-bold">退步 ⚠️</span>';
+                return \`<tr class="border-b hover:bg-gray-50"><td class="p-4">\${k}</td><td class="p-4">\${s1}</td><td class="p-4">\${s2}</td><td class="p-4">\${status}</td></tr>\`;
+            }).join('');
+
+            // Chart
             new Chart(document.getElementById("mainChart"), {
-                type: "bar",
+                type: "line",
                 data: {
                     labels: keys,
-                    datasets: [{label: "V1 Score", data: keys.map(k=>data[k].result_v1.score), backgroundColor: "#007bff"},
-                               {label: "V2 Score", data: keys.map(k=>data[k].result_v2.score), backgroundColor: "#ffc107"}]
+                    datasets: [{label: "V1", data: scores1, borderColor: "#2563eb"}, {label: "V2", data: scores2, borderColor: "#d97706"}]
                 }
             });
         }
